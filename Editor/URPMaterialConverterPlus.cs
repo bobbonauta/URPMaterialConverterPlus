@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -82,6 +83,42 @@ public class URPMaterialConverterPlus : EditorWindow
         { "Unlit/VertexColor",                              "Universal Render Pipeline/Unlit" },
     };
 
+    // Shader vendor che hanno gia' versioni URP-compatibili (NON convertire — sono ok cosi)
+    private static readonly string[] URPCompatibleVendorPrefixes = new[]
+    {
+        "Universal Render Pipeline/",
+        "Shader Graphs/",
+        "Synty/",
+        "SyntyStudios/",
+        "Polytope Studio/",
+        "Idyllic Fantasy Nature/",
+        "OrcProudDefender/",
+        "PampelGames/",
+        "MicroSplat/",
+        "MegaSplat/",
+        "AQUAS/",
+        "AQUAS-Lite/",
+    };
+
+    // Shader di sistema da NON convertire mai (skybox, UI, text)
+    private static readonly string[] SystemShaderPrefixes = new[]
+    {
+        "Skybox/",
+        "Mobile/Skybox",
+        "GUI/",
+        "UI/",
+        "Sprites/",
+        "TextMeshPro/",
+        "Nature/SpeedTree",
+        "Nature/Terrain/",
+        "Custom/",         // custom user shader: lasciali stare
+        "Demo/",           // demo asset shader
+        "FX/",
+    };
+
+    // Marker di materiale ROTTO (shader perso/non risolto)
+    private const string BrokenShaderName = "Hidden/InternalErrorShader";
+
     private void OnGUI()
     {
         EditorGUILayout.LabelField("URP Material Converter Plus", EditorStyles.boldLabel);
@@ -152,8 +189,12 @@ public class URPMaterialConverterPlus : EditorWindow
 
         Debug.Log($"[URPConverter+] {(dryRun ? "[DRY RUN] " : "")}Trovati {assetPaths.Count} .mat in '{targetFolder}'");
 
-        int converted = 0, skipped = 0, alreadyURP = 0, errors = 0, unmapped = 0;
+        int converted = 0, skipped = 0, alreadyURP = 0, errors = 0;
+        int compatibleCustom = 0, systemSkipped = 0, unmapped = 0;
         var unmappedShaders = new HashSet<string>();
+        var brokenMaterials = new List<string>();
+        var compatibleCustomShaders = new HashSet<string>();
+        var systemSkippedShaders = new HashSet<string>();
 
         try
         {
@@ -171,9 +212,43 @@ public class URPMaterialConverterPlus : EditorWindow
 
                 string currentShader = mat.shader.name;
 
+                // 1. Materiale ROTTO (shader perso/non risolto) — va fixato a mano
+                if (currentShader == BrokenShaderName)
+                {
+                    brokenMaterials.Add(assetPath);
+                    continue;
+                }
+
+                // 2. Gia' URP nativo
                 if (currentShader.StartsWith("Universal Render Pipeline/"))
                 {
                     if (skipAlreadyURP) { alreadyURP++; continue; }
+                }
+
+                // 3. Shader vendor URP-compatibili (Synty, Polytope, Idyllic, ecc.) — gia' funzionanti, NON convertire
+                bool isVendorURP = false;
+                foreach (var prefix in URPCompatibleVendorPrefixes)
+                {
+                    if (currentShader.StartsWith(prefix)) { isVendorURP = true; break; }
+                }
+                if (isVendorURP)
+                {
+                    compatibleCustom++;
+                    compatibleCustomShaders.Add(currentShader);
+                    continue;
+                }
+
+                // 4. Shader di sistema (Skybox, TextMeshPro, GUI, Sprites, Nature/Terrain, Nature/SpeedTree, Custom/, Demo/)
+                bool isSystem = false;
+                foreach (var prefix in SystemShaderPrefixes)
+                {
+                    if (currentShader.StartsWith(prefix)) { isSystem = true; break; }
+                }
+                if (isSystem)
+                {
+                    systemSkipped++;
+                    systemSkippedShaders.Add(currentShader);
+                    continue;
                 }
 
                 if (!ShaderMap.TryGetValue(currentShader, out string newShaderName))
@@ -232,27 +307,65 @@ public class URPMaterialConverterPlus : EditorWindow
             EditorUtility.ClearProgressBar();
         }
 
-        // Report finale
+        // Report finale strutturato
         var report = new System.Text.StringBuilder();
         report.AppendLine($"[URPConverter+] {(dryRun ? "DRY RUN — " : "")}REPORT FINALE");
-        report.AppendLine($"  Totale .mat trovati: {assetPaths.Count}");
-        report.AppendLine($"  Convertiti: {converted}");
-        report.AppendLine($"  Già URP (skipped): {alreadyURP}");
-        report.AppendLine($"  Skipped (no shader): {skipped}");
-        report.AppendLine($"  Errori: {errors}");
-        report.AppendLine($"  Shader non mappati: {unmapped}");
+        report.AppendLine($"  Totale .mat trovati:          {assetPaths.Count}");
+        report.AppendLine($"  ✅ Convertiti (mapped → URP): {converted}");
+        report.AppendLine($"  ✅ Già URP nativi (skipped):  {alreadyURP}");
+        report.AppendLine($"  ✅ Vendor URP-compatible:     {compatibleCustom} (Synty/Polytope/Idyllic/ecc — gia' funzionanti)");
+        report.AppendLine($"  ✅ System shader (skybox/UI): {systemSkipped} (intoccabili per design)");
+        report.AppendLine($"  ⚠️ Materiali ROTTI:           {brokenMaterials.Count} (richiesto fix manuale)");
+        report.AppendLine($"  ❓ Shader UNKNOWN:            {unmapped} (mai visti, da valutare)");
+        report.AppendLine($"  ❌ Errori durante conversione: {errors}");
+        report.AppendLine($"  Skipped (no shader/null mat): {skipped}");
+
+        if (brokenMaterials.Count > 0)
+        {
+            report.AppendLine();
+            report.AppendLine($"⚠️  MATERIALI ROTTI ({brokenMaterials.Count}) — questi sono i 'rosa' veri, fixare manualmente:");
+            int max = Mathf.Min(brokenMaterials.Count, 30);
+            for (int i = 0; i < max; i++) report.AppendLine($"    - {brokenMaterials[i]}");
+            if (brokenMaterials.Count > max) report.AppendLine($"    ... e altri {brokenMaterials.Count - max}. Vedi log completo.");
+            report.AppendLine("  Come fixare: apri il .mat nell'Inspector → assegna shader URP/Lit (o reimport del pack di provenienza).");
+        }
+
         if (unmappedShaders.Count > 0)
         {
-            report.AppendLine("  Lista shader non gestiti (verifica manuale o aggiungi al map):");
+            report.AppendLine();
+            report.AppendLine($"❓ SHADER UNKNOWN ({unmappedShaders.Count}) — non in mapping table, non whitelisted:");
             foreach (var s in unmappedShaders)
                 report.AppendLine($"    - {s}");
+            report.AppendLine("  Se sono shader URP-compatibili gia' funzionanti, aggiungili a URPCompatibleVendorPrefixes.");
+            report.AppendLine("  Se sono Built-in/Legacy non coperti, aggiungili a ShaderMap.");
         }
+
+        if (compatibleCustomShaders.Count > 0 && !dryRun == false /* sempre mostra in dry */)
+        {
+            report.AppendLine();
+            report.AppendLine($"ℹ️ Vendor URP-compatible riconosciuti ({compatibleCustomShaders.Count} unici):");
+            foreach (var s in compatibleCustomShaders) report.AppendLine($"    - {s}");
+        }
+
+        if (systemSkippedShaders.Count > 0)
+        {
+            report.AppendLine();
+            report.AppendLine($"ℹ️ System shaders skippati ({systemSkippedShaders.Count} unici):");
+            foreach (var s in systemSkippedShaders) report.AppendLine($"    - {s}");
+        }
+
         Debug.Log(report.ToString());
 
         EditorUtility.DisplayDialog(
             "URP Converter+",
-            $"{(dryRun ? "[DRY RUN]\n" : "")}Convertiti: {converted}\nGià URP: {alreadyURP}\n" +
-            $"Errori: {errors}\nShader non gestiti: {unmapped}\n\nVedi Console per dettagli.",
+            $"{(dryRun ? "[DRY RUN]\n" : "")}" +
+            $"Convertiti: {converted}\n" +
+            $"Già URP: {alreadyURP}\n" +
+            $"Vendor URP-compat: {compatibleCustom}\n" +
+            $"System (skybox/UI): {systemSkipped}\n" +
+            $"⚠️ ROTTI da fixare: {brokenMaterials.Count}\n" +
+            $"❓ Unknown: {unmapped}\n" +
+            $"Errori: {errors}\n\nVedi Console per dettagli.",
             "OK");
     }
 
