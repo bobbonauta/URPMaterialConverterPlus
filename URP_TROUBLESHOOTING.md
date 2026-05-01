@@ -447,6 +447,27 @@
 
 ## 17. Custom Shader Migration
 
+### Errore: "ShaderLab::GrabPasses::ApplyGrabPassMainThread can't be called from a job thread"
+**Sintomo**: console error rosso a runtime/play mode con questo testo. Spesso accompagnato da: "This usually happens when GrabPass is used with SRP so make sure you're using Built-in Render Pipeline when using GrabPass."
+**Causa probabile**: uno shader nel progetto usa `GrabPass { }` — un costrutto **esclusivo del Built-in Render Pipeline**. URP NON supporta GrabPass. Cause tipiche: water shader vecchi, glass/refraction shader, distortion effects, vecchi pack acqua dell'Asset Store.
+**Soluzione**:
+1. **Identifica gli shader colpevoli**: Project window -> Search bar -> `t:Shader` -> apri ognuno e cerca `GrabPass` nel codice. Oppure cerca via grep ricorsivo nei `.shader`.
+2. **Sostituisci con `_CameraOpaqueTexture`** (URP-equivalente):
+   - URP Asset -> `Rendering > Opaque Texture = ON`.
+   - Nello shader, sostituisci `GrabPass { "_GrabTexture" }` + `sampler2D _GrabTexture` con:
+     ```hlsl
+     TEXTURE2D_X(_CameraOpaqueTexture);
+     SAMPLER(sample_CameraOpaqueTexture);
+     ```
+   - Sample con `SAMPLE_TEXTURE2D_X(_CameraOpaqueTexture, sampler_CameraOpaqueTexture, screenUV)`.
+3. **Alternativa rapida**: se lo shader e` di un pack vecchio, cercare la versione URP-aggiornata o sostituire con asset URP-native (es. URP Stylized Water, KWS, ecc.).
+4. **Workaround temporaneo**: se non puoi modificare lo shader, escludi dal render gli oggetti che lo usano (Layer dedicato + Culling Mask) per evitare il crash.
+
+**Fonti**:
+- [Discussions - ShaderLab GrabPasses cant be called from job thread](https://discussions.unity.com/t/shaderlab-grabpasses-applygrabpassmainthread-cant-be-called-from-a-job-thread/899341)
+- [Unity Manual - Camera Opaque Texture URP](https://docs.unity3d.com/Packages/com.unity.render-pipelines.universal@17.0/manual/universalrp-asset.html#general)
+- [Cyanilux - URP Shader Code (refraction with opaque texture)](https://www.cyanilux.com/tutorials/urp-shader-code/)
+
 ### Errore: Surface Shader pink dopo migrazione URP
 **Sintomo**: `#pragma surface` shader appare magenta.
 **Causa probabile**: URP NON supporta Surface Shaders (sono Built-in only).
