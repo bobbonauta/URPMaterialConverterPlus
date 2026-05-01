@@ -138,6 +138,10 @@ The tool preserves these material properties when swapping shaders:
 
 ---
 
+## Troubleshooting
+
+For a comprehensive reference of common URP errors (pink materials, shader stripping, GPU Resident Drawer warnings, lighting issues, decals, camera stacking, performance, build errors, custom shader migration, and more — 27 categories with solutions and sources), see **[URP_TROUBLESHOOTING.md](URP_TROUBLESHOOTING.md)**.
+
 ## Credits
 
 This tool was inspired by [twiks228/URP-Material-Converter-for-Unity](https://github.com/twiks228/URP-Material-Converter-for-Unity), which solved the same problem with a different scope. URP Material Converter Plus was rewritten from scratch with extended shader coverage, in-place editing, dry-run preview, and proper transparency/emission handling.
