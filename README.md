@@ -1,8 +1,12 @@
 # URP Material Converter Plus
 
-A fast, single-pass Unity Editor tool that converts Built-in / Legacy / Mobile / Unlit / Particles shader materials to **Universal Render Pipeline (URP)** equivalents — fixing the "pink/magenta material" problem in seconds.
+A fast, single-pass Unity Editor toolkit that converts Built-in / Legacy / Mobile / Unlit / Particles shader materials to **Universal Render Pipeline (URP)** equivalents — fixing the "pink/magenta material" problem in seconds.
 
 Designed for projects with thousands of materials where Unity's built-in **Render Pipeline Converter** is too slow, too unstable, or stalls indefinitely.
+
+The toolkit ships with **two companion tools**:
+1. **URP Material Converter Plus** — converts `.mat` files (shader swap + property mapping)
+2. **Pink Material Hunter** — scans scenes and project for renderers/materials that still produce pink (broken shader, null slot, unsupported shader, missing texture)
 
 ---
 
@@ -137,6 +141,32 @@ The tool preserves these material properties when swapping shaders:
 | Subfolder targeting | ❌ | ❌ | ✅ |
 
 ---
+
+## Pink Material Hunter (companion tool)
+
+After running URP Material Converter Plus on `.mat` files, use **Pink Material Hunter** to catch problems at the renderer level: broken shaders, null material slots, unsupported shaders, missing textures.
+
+### Usage
+
+Menu: **Tools → Pink Material Hunter**
+
+1. Choose **Scope**: Active Scene / All Open Scenes / Entire Project
+2. (optional) Tick "Detect Built-in shaders" to also flag Standard/Legacy/Mobile materials
+3. (optional) Tick "Detect missing textures" to flag URP/Lit with null `_BaseMap`
+4. Click **EXECUTE SCAN**
+5. Get a clickable report with **Ping GameObject** and **Ping Material** buttons per row
+6. Filter by name/shader, copy report to clipboard, or select all in scene at once
+
+### Problem kinds detected
+
+| Kind | What it means |
+|---|---|
+| `BrokenShader` | Material uses `Hidden/InternalErrorShader` (the actual pink shader) |
+| `MissingShader` | `Material.shader` is null |
+| `UnsupportedShader` | Shader present but `isSupported == false` (compile fail or pipeline mismatch) |
+| `NullMaterialSlot` | Renderer has a null entry in its `sharedMaterials` array |
+| `BuiltinShaderInURP` (optional) | Material still uses Standard/Legacy/Mobile — feed it to the Converter |
+| `MissingMainTexture` (optional) | URP/Lit material with `_BaseMap = null` |
 
 ## Troubleshooting
 
