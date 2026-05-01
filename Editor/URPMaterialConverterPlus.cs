@@ -120,48 +120,38 @@ public class URPMaterialConverterPlus : EditorWindow
             return;
         }
 
-        var searchOpt = convertSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+        // Usa AssetDatabase per trovare i materiali (path-agnostic, Unity-native)
+        string[] guids = AssetDatabase.FindAssets("t:Material", new[] { targetFolder });
 
-        // Risolvi targetFolder in path assoluto, robusto rispetto a CWD
-        string absPath;
-        string normalized = targetFolder.Replace("\\", "/").TrimEnd('/');
-        if (normalized == "Assets")
+        // Ricava i path. Se convertSubfolders e' OFF, filtra solo top-level
+        var assetPaths = new List<string>();
+        foreach (string guid in guids)
         {
-            absPath = Application.dataPath;
-        }
-        else if (normalized.StartsWith("Assets/"))
-        {
-            string relPart = normalized.Substring("Assets/".Length);
-            absPath = Path.Combine(Application.dataPath, relPart);
-        }
-        else
-        {
-            absPath = Path.GetFullPath(targetFolder);
-        }
-        absPath = absPath.Replace("\\", "/");
-
-        if (!Directory.Exists(absPath))
-        {
-            Debug.LogError($"[URPConverter+] Path risolto non esiste: '{absPath}' (input: '{targetFolder}')");
-            return;
+            string p = AssetDatabase.GUIDToAssetPath(guid);
+            if (string.IsNullOrEmpty(p)) continue;
+            if (!convertSubfolders)
+            {
+                string parent = Path.GetDirectoryName(p)?.Replace("\\", "/");
+                string targetNorm = targetFolder.Replace("\\", "/").TrimEnd('/');
+                if (parent != targetNorm) continue;
+            }
+            assetPaths.Add(p);
         }
 
-        var files = Directory.GetFiles(absPath, "*.mat", searchOpt);
-        Debug.Log($"[URPConverter+] {(dryRun ? "[DRY RUN] " : "")}Trovati {files.Length} .mat in '{absPath}'");
+        Debug.Log($"[URPConverter+] {(dryRun ? "[DRY RUN] " : "")}Trovati {assetPaths.Count} .mat in '{targetFolder}'");
 
         int converted = 0, skipped = 0, alreadyURP = 0, errors = 0, unmapped = 0;
         var unmappedShaders = new HashSet<string>();
 
         try
         {
-            for (int i = 0; i < files.Length; i++)
+            for (int i = 0; i < assetPaths.Count; i++)
             {
-                string normalizedFile = files[i].Replace("\\", "/");
-                string assetPath = "Assets" + normalizedFile.Substring(Application.dataPath.Length);
+                string assetPath = assetPaths[i];
                 EditorUtility.DisplayProgressBar(
                     "URP Converter+",
-                    $"{Path.GetFileName(assetPath)} ({i + 1}/{files.Length})",
-                    (float)i / files.Length);
+                    $"{Path.GetFileName(assetPath)} ({i + 1}/{assetPaths.Count})",
+                    (float)i / assetPaths.Count);
 
                 Material mat = AssetDatabase.LoadAssetAtPath<Material>(assetPath);
                 if (mat == null) { skipped++; continue; }
@@ -200,8 +190,12 @@ public class URPMaterialConverterPlus : EditorWindow
                 {
                     if (createBackup)
                     {
-                        string bakPath = files[i] + ".bak";
-                        if (!File.Exists(bakPath)) File.Copy(files[i], bakPath);
+                        string fullPath = Path.Combine(
+                            Path.GetDirectoryName(Application.dataPath) ?? "",
+                            assetPath);
+                        string bakPath = fullPath + ".bak";
+                        if (File.Exists(fullPath) && !File.Exists(bakPath))
+                            File.Copy(fullPath, bakPath);
                     }
 
                     ConvertMaterial(mat, newShader, currentShader);
@@ -229,7 +223,7 @@ public class URPMaterialConverterPlus : EditorWindow
         // Report finale
         var report = new System.Text.StringBuilder();
         report.AppendLine($"[URPConverter+] {(dryRun ? "DRY RUN — " : "")}REPORT FINALE");
-        report.AppendLine($"  Totale .mat trovati: {files.Length}");
+        report.AppendLine($"  Totale .mat trovati: {assetPaths.Count}");
         report.AppendLine($"  Convertiti: {converted}");
         report.AppendLine($"  Già URP (skipped): {alreadyURP}");
         report.AppendLine($"  Skipped (no shader): {skipped}");
