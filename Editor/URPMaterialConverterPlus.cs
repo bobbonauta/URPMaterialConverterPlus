@@ -121,10 +121,33 @@ public class URPMaterialConverterPlus : EditorWindow
         }
 
         var searchOpt = convertSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-        string absPath = Path.GetFullPath(targetFolder);
-        var files = Directory.GetFiles(absPath, "*.mat", searchOpt);
 
-        Debug.Log($"[URPConverter+] {(dryRun ? "[DRY RUN] " : "")}Trovati {files.Length} .mat in '{targetFolder}'");
+        // Risolvi targetFolder in path assoluto, robusto rispetto a CWD
+        string absPath;
+        string normalized = targetFolder.Replace("\\", "/").TrimEnd('/');
+        if (normalized == "Assets")
+        {
+            absPath = Application.dataPath;
+        }
+        else if (normalized.StartsWith("Assets/"))
+        {
+            string relPart = normalized.Substring("Assets/".Length);
+            absPath = Path.Combine(Application.dataPath, relPart);
+        }
+        else
+        {
+            absPath = Path.GetFullPath(targetFolder);
+        }
+        absPath = absPath.Replace("\\", "/");
+
+        if (!Directory.Exists(absPath))
+        {
+            Debug.LogError($"[URPConverter+] Path risolto non esiste: '{absPath}' (input: '{targetFolder}')");
+            return;
+        }
+
+        var files = Directory.GetFiles(absPath, "*.mat", searchOpt);
+        Debug.Log($"[URPConverter+] {(dryRun ? "[DRY RUN] " : "")}Trovati {files.Length} .mat in '{absPath}'");
 
         int converted = 0, skipped = 0, alreadyURP = 0, errors = 0, unmapped = 0;
         var unmappedShaders = new HashSet<string>();
@@ -133,7 +156,8 @@ public class URPMaterialConverterPlus : EditorWindow
         {
             for (int i = 0; i < files.Length; i++)
             {
-                string assetPath = "Assets" + files[i].Substring(Application.dataPath.Length).Replace("\\", "/");
+                string normalizedFile = files[i].Replace("\\", "/");
+                string assetPath = "Assets" + normalizedFile.Substring(Application.dataPath.Length);
                 EditorUtility.DisplayProgressBar(
                     "URP Converter+",
                     $"{Path.GetFileName(assetPath)} ({i + 1}/{files.Length})",
