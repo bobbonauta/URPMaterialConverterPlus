@@ -96,8 +96,6 @@ public class URPMaterialConverterPlus : EditorWindow
         "PampelGames/",
         "MicroSplat/",
         "MegaSplat/",
-        "AQUAS/",
-        "AQUAS-Lite/",
     };
 
     // Shader di sistema da NON convertire mai (skybox, UI, text)
