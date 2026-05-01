@@ -68,6 +68,18 @@ public class URPMaterialConverterPlus : EditorWindow
         // Particles → URP/Particles/Unlit (semplificato)
         { "Particles/Standard Surface",                     "Universal Render Pipeline/Particles/Lit" },
         { "Particles/Standard Unlit",                       "Universal Render Pipeline/Particles/Unlit" },
+
+        // Legacy Particles
+        { "Legacy Shaders/Particles/Additive",              "Universal Render Pipeline/Particles/Unlit" },
+        { "Legacy Shaders/Particles/Additive (Soft)",       "Universal Render Pipeline/Particles/Unlit" },
+        { "Legacy Shaders/Particles/Multiply",              "Universal Render Pipeline/Particles/Unlit" },
+        { "Legacy Shaders/Particles/Alpha Blended",         "Universal Render Pipeline/Particles/Unlit" },
+        { "Legacy Shaders/Particles/Alpha Blended Premultiply", "Universal Render Pipeline/Particles/Unlit" },
+        { "Legacy Shaders/Particles/Anim Alpha Blended",    "Universal Render Pipeline/Particles/Unlit" },
+        { "Legacy Shaders/Particles/VertexLit Blended",     "Universal Render Pipeline/Particles/Unlit" },
+
+        // Vertex color unlit
+        { "Unlit/VertexColor",                              "Universal Render Pipeline/Unlit" },
     };
 
     private void OnGUI()
